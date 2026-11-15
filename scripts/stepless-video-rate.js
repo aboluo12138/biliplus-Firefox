@@ -87,6 +87,16 @@
     if (!event || event.defaultPrevented || event.isComposing) return null;
     if (event.ctrlKey || event.metaKey || event.altKey) return null;
     if (isEditableTarget(event.target) || isEditableTarget(activeElement)) return null;
+    // Shadow DOM 里的输入框（如 B 站评论区的 Web Component 编辑器）在 document 层
+    // 会被重定向成 shadow host，上面的 isContentEditable/closest 看不到真正的输入区，
+    // 必须用 composedPath 再判一次，否则 0 / + / - 等快捷键会抢走你正在输入的字符。
+    if (
+      typeof _UTILS !== 'undefined' &&
+      typeof _UTILS.isTypingContext === 'function' &&
+      _UTILS.isTypingContext(event, typeof document === 'undefined' ? null : document)
+    ) {
+      return null;
+    }
 
     const code = event.code || '';
     const key = event.key || '';

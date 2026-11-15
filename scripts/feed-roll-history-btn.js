@@ -124,6 +124,16 @@
     );
   };
 
+  /**
+   * Shadow DOM 内的输入框（B 站评论区的 Web Component 编辑器）在 document 层
+   * 收到的 event.target 已被重定向为 shadow host，isEditableElement 看不到真正的
+   * 输入区，这里用 composedPath 补判，避免 R 快捷键在评论框里抢走字符。
+   */
+  const isTypingInShadow = event =>
+    typeof _UTILS !== 'undefined' &&
+    typeof _UTILS.isTypingContext === 'function' &&
+    _UTILS.isTypingContext(event, null);
+
   const isHomePageLocation = locationObject =>
     Boolean(
       locationObject &&
@@ -174,7 +184,8 @@
         !event.metaKey &&
         !event.shiftKey &&
         !isEditableElement(event.target) &&
-        !isEditableElement(activeElement)
+        !isEditableElement(activeElement) &&
+        !isTypingInShadow(event)
     );
 
   const api = {

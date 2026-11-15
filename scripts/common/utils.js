@@ -331,6 +331,88 @@ class _UTILS {
     const disconnect = () => observer.disconnect();
     return disconnect;
   }
+
+  /**
+   * 单个节点是否属于“用户可输入”的控件。
+   *
+   * 注意：Shadow DOM 内的编辑器在 document 层表现为 shadow host
+   * （自定义元素），host 自身既不是 contenteditable 也 closest 不到内部，
+   * 所以判断整体输入上下文要用 isTypingContext()。
+   */
+  static isEditableNode(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.isContentEditable) return true;
+
+    const tagName = String(node.tagName || '').toLowerCase();
+    if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') return true;
+
+    const attribute = name =>
+      typeof node.getAttribute === 'function' ? node.getAttribute(name) : null;
+
+    const contentEditable = attribute('contenteditable');
+    if (contentEditable !== null && String(contentEditable).toLowerCase() !== 'false') {
+      return true;
+    }
+
+    const role = attribute('role');
+    if (role && ['textbox', 'searchbox', 'combobox'].includes(String(role).toLowerCase())) {
+      return true;
+    }
+
+    if (typeof node.closest !== 'function') return false;
+    return Boolean(
+      node.closest(
+        'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="searchbox"], [role="combobox"]'
+      )
+    );
+  }
+
+  /**
+   * 逐层下钻 shadow root，取真正持有焦点的元素。
+   * 例如 <bili-comment-box> 内部的编辑器获得焦点时，document.activeElement
+   * 只会是 host 元素，真正可输入的元素在 host.shadowRoot.activeElement。
+   */
+  static deepActiveElement(documentObject) {
+    let active = documentObject && documentObject.activeElement;
+    for (let depth = 0; active && depth < 20; depth += 1) {
+      const inner = active.shadowRoot && active.shadowRoot.activeElement;
+      if (!inner) break;
+      active = inner;
+    }
+    return active || null;
+  }
+
+  /**
+   * 该按键事件是否发生在“用户正在输入”的上下文里。
+   *
+   * 必须看 composedPath：B 站评论区等 Web Component 内部的编辑器，
+   * 事件传到 document 时 target 已被重定向为 shadow host，
+   * 只用 isContentEditable / closest 判断会漏掉，导致快捷键抢走字符。
+   */
+  static isTypingContext(event, documentObject) {
+    if (!event) return false;
+
+    let path = null;
+    if (typeof event.composedPath === 'function') {
+      try {
+        path = event.composedPath();
+      } catch {
+        path = null;
+      }
+    }
+
+    if (Array.isArray(path) && path.length > 0) {
+      // closed shadow root 的 composedPath 可能被裁剪成只有 host，
+      // 所以这里不提前返回，下面还会再看一次真实焦点。
+      if (path.some(node => _UTILS.isEditableNode(node))) return true;
+    }
+
+    if (_UTILS.isEditableNode(event.target)) return true;
+
+    const fallbackDocument =
+      documentObject || (typeof document === 'undefined' ? null : document);
+    return _UTILS.isEditableNode(_UTILS.deepActiveElement(fallbackDocument));
+  }
 }
 
 if (typeof module === 'object' && module.exports) {
