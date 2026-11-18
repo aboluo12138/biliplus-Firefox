@@ -529,6 +529,11 @@ test('火狐发布工作流保持 ff-v* 触发与关键步骤', () => {
   assert.match(workflow, /dist\/signed\/\*/);
   assert.match(workflow, /biliplus-firefox-\$\{RELEASE_VERSION\}-signed\.xpi/);
 
+  // 手动触发时允许不带前缀（1.2.0.1 / v1.2.0.1 / ff-v1.2.0.1 都接受），
+  // 统一规范成 ff-v<版本>：否则用户填错前缀会白跑一次。
+  assert.match(workflow, /version="\$\{raw#ff-v\}"/, '应先剥离可选的 ff-v 前缀');
+  assert.match(workflow, /tag="ff-v\$\{version\}"/, 'Release 名应统一为 ff-v<版本>');
+
   // 签名必须有条件：没配 AMO 密钥的仓库不能因此失败
   assert.match(
     workflow,
